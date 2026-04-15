@@ -20,8 +20,8 @@ $(LADSPA_DIR)/%.so: $(LADSPA_DIR)/%.c
 	$(CC) $(CFLAGS) -o $@ $<
 
 lv2:
-	$(CXX) -shared -fPIC -O2 -o $(LV2_DIR)/KickDruMan.lv2/KickDruMan.so $(LV2_DIR)/KickDruMan.lv2/KickDruMan.cpp -lm
-	$(CXX) -shared -fPIC -O2 -o $(LV2_DIR)/MireBass.lv2/MireBass.so $(LV2_DIR)/MireBass.lv2/MireBass.cpp -lm
+	$(CXX) -shared -fPIC -O3 -o $(LV2_DIR)/KickDruMan.lv2/KickDruMan.so $(LV2_DIR)/KickDruMan.lv2/KickDruMan.cpp -ffast-math -lm
+	$(CXX) -shared -fPIC -O3 -o $(LV2_DIR)/MireBass.lv2/MireBass.so $(LV2_DIR)/MireBass.lv2/MireBass.cpp -ffast-math -lm
 
 
 install:

@@ -18,16 +18,16 @@ typedef struct {
     float m_fSR;
     float lastIn1, lastOut1, lastIn2, lastOut2, lastIn3, lastOut3;
     float x1[3], x2[3], y1[3], y2[3];
-} Mackity;
+} Console;
 
-LADSPA_Handle instantiateMackity(const LADSPA_Descriptor * Descriptor, unsigned long SampleRate) {
-    Mackity * ptr = (Mackity *)calloc(1, sizeof(Mackity));
+LADSPA_Handle instantiateStrip(const LADSPA_Descriptor * Descriptor, unsigned long SampleRate) {
+    Console * ptr = (Console *)calloc(1, sizeof(Console));
     if (ptr) ptr->m_fSR = (float)SampleRate;
     return (LADSPA_Handle)ptr;
 }
 
-void connectPortMackity(LADSPA_Handle Instance, unsigned long Port, LADSPA_Data * Data) {
-    Mackity * p = (Mackity *)Instance;
+void connectPortStrip(LADSPA_Handle Instance, unsigned long Port, LADSPA_Data * Data) {
+    Console * p = (Console *)Instance;
     if (!p) return;
     switch (Port) {
         case M_CRANK: p->m_pfCrank = Data; break;
@@ -49,7 +49,7 @@ void calcBiquad(float type, float freq, float sr, float db, float* b, float* a) 
     float cosw = cosf(w0);
     float b0, b1, b2, a0, a1, a2;
 
-    if (type == 0) { // High Shelf
+    if (type == 0) { 
         float rA = sqrtf(A);
         b0 = A*((A+1.0f)+(A-1.0f)*cosw+2.0f*rA*alpha);
         b1 = -2.0f*A*((A-1.0f)+(A+1.0f)*cosw);
@@ -57,10 +57,10 @@ void calcBiquad(float type, float freq, float sr, float db, float* b, float* a) 
         a0 = (A+1.0f)-(A-1.0f)*cosw+2.0f*rA*alpha;
         a1 = 2.0f*((A-1.0f)-(A+1.0f)*cosw);
         a2 = (A+1.0f)-(A-1.0f)*cosw-2.0f*rA*alpha;
-    } else if (type == 1) { // Peaking
+    } else if (type == 1) { 
         b0 = 1.0f + alpha * A; b1 = -2.0f * cosw; b2 = 1.0f - alpha * A;
         a0 = 1.0f + alpha / A; a1 = -2.0f * cosw; a2 = 1.0f - alpha / A;
-    } else { // Low Shelf
+    } else { 
         float rA = sqrtf(A);
         b0 = A*((A+1.0f)-(A-1.0f)*cosw+2.0f*rA*alpha);
         b1 = 2.0f*A*((A-1.0f)-(A+1.0f)*cosw);
@@ -73,8 +73,8 @@ void calcBiquad(float type, float freq, float sr, float db, float* b, float* a) 
     b[0]=b0/a0; b[1]=b1/a0; b[2]=b2/a0; a[1]=a1/a0; a[2]=a2/a0;
 }
 
-void runMackity(LADSPA_Handle Instance, unsigned long SampleCount) {
-    Mackity * p = (Mackity *)Instance;
+void runStrip(LADSPA_Handle Instance, unsigned long SampleCount) {
+    Console * p = (Console *)Instance;
     float bH[3], aH[3], bM[3], aM[3], bL[3], aL[3];
     
     calcBiquad(0, 12000.0f, p->m_fSR, (*p->m_pfHigh - 0.5f)*30.0f, bH, aH);
@@ -108,14 +108,14 @@ void runMackity(LADSPA_Handle Instance, unsigned long SampleCount) {
     }
 }
 
-void cleanupMackity(LADSPA_Handle Instance) { free(Instance); }
+void cleanupStrip(LADSPA_Handle Instance) { free(Instance); }
 
 static LADSPA_Descriptor * g_desc = NULL;
 const LADSPA_Descriptor * ladspa_descriptor(unsigned long Index) {
     if (Index != 0) return NULL;
     if (!g_desc) {
         g_desc = (LADSPA_Descriptor *)calloc(1, sizeof(LADSPA_Descriptor));
-        g_desc->UniqueID = 604012;
+        g_desc->UniqueID = 604014;
         g_desc->Label = strdup("mire_strip");
         g_desc->Name = strdup("Mire Strip");
         g_desc->Maker = strdup("Mire");
@@ -135,7 +135,6 @@ const LADSPA_Descriptor * ladspa_descriptor(unsigned long Index) {
         h[M_CRANK].HintDescriptor = LADSPA_HINT_BOUNDED_BELOW|LADSPA_HINT_BOUNDED_ABOVE|LADSPA_HINT_DEFAULT_0;
         h[M_CRANK].LowerBound=0; h[M_CRANK].UpperBound=1;
 
-        // FIXED: Using LADSPA_HINT_DEFAULT_1 instead of MAX
         h[M_SLAM].HintDescriptor = LADSPA_HINT_BOUNDED_BELOW|LADSPA_HINT_BOUNDED_ABOVE|LADSPA_HINT_DEFAULT_1;
         h[M_SLAM].LowerBound=0; h[M_SLAM].UpperBound=1;
 
@@ -144,14 +143,16 @@ const LADSPA_Descriptor * ladspa_descriptor(unsigned long Index) {
             h[i].LowerBound=0; h[i].UpperBound=1;
         }
 
-        // FIXED: Using LADSPA_HINT_DEFAULT_1 instead of MAX
         h[M_LEVEL].HintDescriptor = LADSPA_HINT_BOUNDED_BELOW|LADSPA_HINT_BOUNDED_ABOVE|LADSPA_HINT_DEFAULT_1;
         h[M_LEVEL].LowerBound=0; h[M_LEVEL].UpperBound=1;
 
         h[M_HPF].HintDescriptor = LADSPA_HINT_TOGGLED|LADSPA_HINT_DEFAULT_0;
         
         g_desc->PortRangeHints = h;
-        g_desc->instantiate = instantiateMackity; g_desc->connect_port = connectPortMackity; g_desc->run = runMackity; g_desc->cleanup = cleanupMackity;
+        g_desc->instantiate = instantiateStrip; 
+        g_desc->connect_port = connectPortStrip; 
+        g_desc->run = runStrip; 
+        g_desc->cleanup = cleanupStrip;
     }
     return g_desc;
 }

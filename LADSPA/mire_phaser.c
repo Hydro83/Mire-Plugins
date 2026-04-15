@@ -7,17 +7,17 @@
 #define M_PI 3.14159265358979323846
 #endif
 
-#define PHASE_RATE    0
-#define PHASE_DEPTH   1
-#define PHASE_MANUAL  2
-#define PHASE_FEEDBK  3
-#define PHASE_DELAY_ON 4  // NEW: Toggle Button
-#define PHASE_DELAY   5
-#define PHASE_STAGES  6
-#define PHASE_IN_L    7
-#define PHASE_IN_R    8
-#define PHASE_OUT_L   9
-#define PHASE_OUT_R   10
+#define PHASE_RATE     0
+#define PHASE_DEPTH    1
+#define PHASE_MANUAL   2
+#define PHASE_FEEDBK   3
+#define PHASE_DELAY_ON 4
+#define PHASE_DELAY    5
+#define PHASE_STAGES   6
+#define PHASE_IN_L     7
+#define PHASE_IN_R     8
+#define PHASE_OUT_L    9
+#define PHASE_OUT_R    10
 
 #define MAX_DELAY 48000 
 
@@ -36,12 +36,14 @@ typedef struct {
     float * delayBufR;
     unsigned long writeIdx;
     
-    // Direct feedback storage for "Off" mode
     float lastOutL, lastOutR;
 } MirePhase;
 
 static inline float process_ap(APFilter *f, float in, float g) {
     float out = -g * in + f->x1 + g * f->y1;
+    
+    if (fabsf(out) < 1e-15f) out = 0.0f;
+    
     f->x1 = in;
     f->y1 = out;
     return out;
@@ -78,27 +80,26 @@ void runPhase(LADSPA_Handle Instance, unsigned long SampleCount) {
     long delaySamps = (long)(delayMs * 0.001f * p->m_fSR);
     if (delaySamps >= MAX_DELAY) delaySamps = MAX_DELAY - 1;
 
+    float lfo_val = sinf(p->lfo_phase) * depth;
+    float combined = fmaxf(0.0f, fminf(1.0f, manual + lfo_val));
+    float freq = 50.0f * powf(15000.0f / 50.0f, combined);
+    float tan_val = tanf(M_PI * freq / p->m_fSR);
+    float g = (tan_val - 1.0f) / (tan_val + 1.0f);
+
+    float lfo_inc = (2.0f * M_PI * rate) / p->m_fSR;
+
     for (unsigned long i = 0; i < SampleCount; i++) {
-        p->lfo_phase += (6.283185f * rate) / p->m_fSR;
-        if (p->lfo_phase > 6.283185f) p->lfo_phase -= 6.283185f;
+        p->lfo_phase += lfo_inc;
+        if (p->lfo_phase > 2.0f * M_PI) p->lfo_phase -= 2.0f * M_PI;
         
-        float lfo_mod = sinf(p->lfo_phase) * depth;
-        float combined = fmaxf(0.0f, fminf(1.0f, manual + lfo_mod));
-
-        float freq = 50.0f * powf(15000.0f / 50.0f, combined);
-        float tan_val = tanf(M_PI * freq / p->m_fSR);
-        float g = (tan_val - 1.0f) / (tan_val + 1.0f);
-
         float fbSigL, fbSigR;
 
         if (delayOn) {
-            // Use Buffer for DP/4 Sound
             long readIdx = (long)p->writeIdx - delaySamps;
-            if (readIdx < 0) readIdx += MAX_DELAY;
+            while (readIdx < 0) readIdx += MAX_DELAY;
             fbSigL = p->delayBufL[readIdx];
             fbSigR = p->delayBufR[readIdx];
         } else {
-            // Use Direct Feedback for Standard Sound
             fbSigL = p->lastOutL;
             fbSigR = p->lastOutR;
         }
@@ -106,13 +107,14 @@ void runPhase(LADSPA_Handle Instance, unsigned long SampleCount) {
         float inL = p->ports[PHASE_IN_L][i] + (fbSigL * fb);
         float inR = p->ports[PHASE_IN_R][i] + (fbSigR * fb);
 
-        float stageL = inL; float stageR = inR;
+        float stageL = inL; 
+        float stageR = inR;
+        
         for (int s = 0; s < stages; s++) {
             stageL = process_ap(&p->filtersL[s], stageL, g);
             stageR = process_ap(&p->filtersR[s], stageR, g);
         }
 
-        // Always update both for seamless switching
         p->lastOutL = stageL;
         p->lastOutR = stageR;
         p->delayBufL[p->writeIdx] = stageL;
@@ -126,8 +128,8 @@ void runPhase(LADSPA_Handle Instance, unsigned long SampleCount) {
 
 void cleanupPhase(LADSPA_Handle Instance) {
     MirePhase * p = (MirePhase *)Instance;
-    free(p->delayBufL);
-    free(p->delayBufR);
+    if (p->delayBufL) free(p->delayBufL);
+    if (p->delayBufR) free(p->delayBufR);
     free(p);
 }
 
@@ -136,7 +138,7 @@ const LADSPA_Descriptor * ladspa_descriptor(unsigned long Index) {
     if (Index != 0) return NULL;
     if (!g_desc) {
         g_desc = (LADSPA_Descriptor *)calloc(1, sizeof(LADSPA_Descriptor));
-        g_desc->UniqueID = 604002;
+        g_desc->UniqueID = 604010;
         g_desc->Label = strdup("mire_phaser");
         g_desc->Name = strdup("Mire Phaser");
         g_desc->Maker = strdup("Mire");
@@ -149,31 +151,33 @@ const LADSPA_Descriptor * ladspa_descriptor(unsigned long Index) {
         g_desc->PortDescriptors = pd;
 
         const char ** names = (const char **)calloc(11, sizeof(char *));
-        names[0]="Rate"; names[1]="Depth"; names[2]="Manual"; names[3]="Feedback"; 
-        names[4]="FB Delay On"; names[5]="FB Delay (ms)"; names[6]="Stages";
+        names[0]="LFO Rate (Hz)"; names[1]="LFO Depth"; names[2]="Manual (Center)"; names[3]="Feedback"; 
+        names[4]="Feedback Delay On"; names[5]="Delay Time (ms)"; names[6]="Stages (All-pass)";
         names[7]="In L"; names[8]="In R"; names[9]="Out L"; names[10]="Out R";
         g_desc->PortNames = names;
 
         LADSPA_PortRangeHint * h = (LADSPA_PortRangeHint *)calloc(11, sizeof(LADSPA_PortRangeHint));
-        h[0].HintDescriptor = LADSPA_HINT_BOUNDED_BELOW|LADSPA_HINT_BOUNDED_ABOVE|LADSPA_HINT_DEFAULT_MINIMUM;
-        h[0].LowerBound=0.01; h[0].UpperBound=0.6;
-        h[1].HintDescriptor = LADSPA_HINT_BOUNDED_BELOW|LADSPA_HINT_BOUNDED_ABOVE|LADSPA_HINT_DEFAULT_MIDDLE;
+        
+        
+        h[0].LowerBound=0.01; h[0].UpperBound=2.0;
+        h[0].HintDescriptor = LADSPA_HINT_BOUNDED_BELOW|LADSPA_HINT_BOUNDED_ABOVE|LADSPA_HINT_DEFAULT_LOW;
         h[1].LowerBound=0.0; h[1].UpperBound=1.0;
-        h[2].HintDescriptor = LADSPA_HINT_BOUNDED_BELOW|LADSPA_HINT_BOUNDED_ABOVE|LADSPA_HINT_DEFAULT_MIDDLE;
+        h[1].HintDescriptor = LADSPA_HINT_BOUNDED_BELOW|LADSPA_HINT_BOUNDED_ABOVE|LADSPA_HINT_DEFAULT_MIDDLE;
         h[2].LowerBound=0.0; h[2].UpperBound=1.0;
-        h[3].HintDescriptor = LADSPA_HINT_BOUNDED_BELOW|LADSPA_HINT_BOUNDED_ABOVE|LADSPA_HINT_DEFAULT_MIDDLE;
+        h[2].HintDescriptor = LADSPA_HINT_BOUNDED_BELOW|LADSPA_HINT_BOUNDED_ABOVE|LADSPA_HINT_DEFAULT_MIDDLE;
         h[3].LowerBound=-0.98; h[3].UpperBound=0.98;
-        
-        // Toggle: 0 or 1
+        h[3].HintDescriptor = LADSPA_HINT_BOUNDED_BELOW|LADSPA_HINT_BOUNDED_ABOVE|LADSPA_HINT_DEFAULT_0;
         h[4].HintDescriptor = LADSPA_HINT_TOGGLED | LADSPA_HINT_DEFAULT_0;
-        
+        h[5].LowerBound=0.0; h[5].UpperBound=20.0;
         h[5].HintDescriptor = LADSPA_HINT_BOUNDED_BELOW|LADSPA_HINT_BOUNDED_ABOVE|LADSPA_HINT_DEFAULT_LOW;
-        h[5].LowerBound=0.0; h[5].UpperBound=10.0;
-        h[6].HintDescriptor = LADSPA_HINT_BOUNDED_BELOW|LADSPA_HINT_BOUNDED_ABOVE|LADSPA_HINT_INTEGER|LADSPA_HINT_DEFAULT_MAXIMUM;
         h[6].LowerBound=1; h[6].UpperBound=12;
+        h[6].HintDescriptor = LADSPA_HINT_BOUNDED_BELOW|LADSPA_HINT_BOUNDED_ABOVE|LADSPA_HINT_INTEGER|LADSPA_HINT_DEFAULT_MAXIMUM;
+        
         g_desc->PortRangeHints = h;
-
-        g_desc->instantiate = instantiatePhase; g_desc->connect_port = connectPortPhase; g_desc->run = runPhase; g_desc->cleanup = cleanupPhase;
+        g_desc->instantiate = instantiatePhase; 
+        g_desc->connect_port = connectPortPhase; 
+        g_desc->run = runPhase; 
+        g_desc->cleanup = cleanupPhase;
     }
     return g_desc;
 }

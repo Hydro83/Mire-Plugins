@@ -3,7 +3,7 @@
 #include <string.h>
 #include <ladspa.h>
 
-static float mire_goa_bus[16];
+static volatile float mire_goa_bus[16] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 
 #define DY_MODE    0
 #define DY_CHAN    1
@@ -18,14 +18,12 @@ static float mire_goa_bus[16];
 
 typedef struct {
     LADSPA_Data * ports[10];
-    float target_env; // The "Goal" volume
-    float current_env; // The "Smoothed" volume
+    float current_env;
     int ducking; 
 } MireDynamics;
 
 LADSPA_Handle instantiateDyn(const LADSPA_Descriptor * Descriptor, unsigned long SR) {
     MireDynamics * p = (MireDynamics *)calloc(1, sizeof(MireDynamics));
-    p->target_env = 1.0f;
     p->current_env = 1.0f;
     return (LADSPA_Handle)p;
 }
@@ -39,12 +37,16 @@ void runDyn(LADSPA_Handle Instance, unsigned long SampleCount) {
     int mode = (int)(*p->ports[DY_MODE] + 0.5f);
     int chan = (int)(*p->ports[DY_CHAN] + 0.5f) & 15;
 
+    float thresh = *p->ports[DY_THRESH];
+    float f_out = *p->ports[DY_F_OUT]; 
+    float f_in  = *p->ports[DY_F_IN];
+    float depth = *p->ports[DY_DEPTH];
+
     for (unsigned long i = 0; i < SampleCount; i++) {
         float inL = p->ports[DY_IN_L][i];
         float inR = p->ports[DY_IN_R][i];
 
         if (mode == 0) { // TRIGGER
-            float thresh = *p->ports[DY_THRESH];
             if (fabsf(inL) > thresh || fabsf(inR) > thresh) {
                 mire_goa_bus[chan] = 1.0f;
             }
@@ -56,40 +58,32 @@ void runDyn(LADSPA_Handle Instance, unsigned long SampleCount) {
                 mire_goa_bus[chan] = 0.0f; 
             }
 
-            // Knob values now act as "Smoothness" factors
-            float f_out = *p->ports[DY_F_OUT]; 
-            float f_in  = *p->ports[DY_F_IN];
-            float depth = *p->ports[DY_DEPTH];
-
-            if (p->ducking) {
-                p->target_env = depth;
-                // If we are close enough to the floor, stop the "ducking" state
-                if (p->current_env <= depth + 0.001f) p->ducking = 0;
-            } else {
-                p->target_env = 1.0f;
+            float target_env = (p->ducking) ? depth : 1.0f;
+            float speed = (target_env < p->current_env) ? f_out : f_in;
+            
+            p->current_env += (target_env - p->current_env) * speed;
+            
+            
+            if (p->ducking && p->current_env <= depth + 0.005f) {
+                p->ducking = 0;
             }
-
-            // --- THE SMOOTHING ENGINE ---
-            // This prevents the "nasty artifacts" by slowly moving 
-            // the current volume toward the target volume.
-            float speed = (p->target_env < p->current_env) ? f_out : f_in;
-            p->current_env += (p->target_env - p->current_env) * speed;
 
             p->ports[DY_OUT_L][i] = inL * p->current_env;
             p->ports[DY_OUT_R][i] = inR * p->current_env;
         }
     }
 }
-// ... (Cleanup and Descriptor remain the same as previous 10-port version)
 
 void cleanupDyn(LADSPA_Handle Instance) { free(Instance); }
+
+
 
 static LADSPA_Descriptor * g_desc = NULL;
 const LADSPA_Descriptor * ladspa_descriptor(unsigned long Index) {
     if (Index != 0) return NULL;
     if (!g_desc) {
         g_desc = (LADSPA_Descriptor *)calloc(1, sizeof(LADSPA_Descriptor));
-        g_desc->UniqueID = 604009;
+        g_desc->UniqueID = 604006;
         g_desc->Label = strdup("mire_ducker");
         g_desc->Name = strdup("Mire Ducker");
         g_desc->Maker = strdup("Mire");
@@ -108,13 +102,12 @@ const LADSPA_Descriptor * ladspa_descriptor(unsigned long Index) {
         g_desc->PortNames = names;
 
         LADSPA_PortRangeHint * h = (LADSPA_PortRangeHint *)calloc(10, sizeof(LADSPA_PortRangeHint));
-        h[0].LowerBound=0; h[0].UpperBound=1; h[0].HintDescriptor=LADSPA_HINT_BOUNDED_BELOW|LADSPA_HINT_BOUNDED_ABOVE|LADSPA_HINT_INTEGER;
-        h[1].LowerBound=0; h[1].UpperBound=15; h[1].HintDescriptor=LADSPA_HINT_BOUNDED_BELOW|LADSPA_HINT_BOUNDED_ABOVE|LADSPA_HINT_INTEGER;
-        h[2].LowerBound=0; h[2].UpperBound=1; h[2].HintDescriptor=LADSPA_HINT_BOUNDED_BELOW|LADSPA_HINT_BOUNDED_ABOVE|LADSPA_HINT_DEFAULT_MIDDLE;
-        // Attack & Release knobs restricted to 0.09
-        h[3].LowerBound=0.0001; h[3].UpperBound=0.09; h[3].HintDescriptor=LADSPA_HINT_BOUNDED_BELOW|LADSPA_HINT_BOUNDED_BELOW;
-        h[4].LowerBound=0.0001; h[4].UpperBound=0.09; h[4].HintDescriptor=LADSPA_HINT_BOUNDED_BELOW|LADSPA_HINT_BOUNDED_BELOW;
-        h[5].LowerBound=0; h[5].UpperBound=1; h[5].HintDescriptor=LADSPA_HINT_BOUNDED_BELOW|LADSPA_HINT_BOUNDED_BELOW;
+        h[0].LowerBound=0; h[0].UpperBound=1; h[0].HintDescriptor=LADSPA_HINT_BOUNDED_BELOW|LADSPA_HINT_BOUNDED_ABOVE|LADSPA_HINT_INTEGER|LADSPA_HINT_DEFAULT_MINIMUM;
+        h[1].LowerBound=0; h[1].UpperBound=15; h[1].HintDescriptor=LADSPA_HINT_BOUNDED_BELOW|LADSPA_HINT_BOUNDED_ABOVE|LADSPA_HINT_INTEGER|LADSPA_HINT_DEFAULT_MINIMUM;
+        h[2].LowerBound=0; h[2].UpperBound=1; h[2].HintDescriptor=LADSPA_HINT_BOUNDED_BELOW|LADSPA_HINT_BOUNDED_ABOVE|LADSPA_HINT_DEFAULT_MINIMUM;
+        h[3].LowerBound=0.0001; h[3].UpperBound=0.09; h[3].HintDescriptor=LADSPA_HINT_BOUNDED_BELOW|LADSPA_HINT_BOUNDED_BELOW|LADSPA_HINT_DEFAULT_MIDDLE;;
+        h[4].LowerBound=0.0001; h[4].UpperBound=0.09; h[4].HintDescriptor=LADSPA_HINT_BOUNDED_BELOW|LADSPA_HINT_BOUNDED_BELOW|LADSPA_HINT_DEFAULT_MINIMUM;;
+        h[5].LowerBound=0; h[5].UpperBound=1; h[5].HintDescriptor=LADSPA_HINT_BOUNDED_BELOW|LADSPA_HINT_BOUNDED_BELOW|LADSPA_HINT_DEFAULT_MINIMUM;
         g_desc->PortRangeHints = h;
 
         g_desc->instantiate = instantiateDyn; g_desc->connect_port = connectPortDyn; g_desc->run = runDyn; g_desc->cleanup = cleanupDyn;

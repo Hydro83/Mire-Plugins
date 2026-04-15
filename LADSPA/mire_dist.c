@@ -91,19 +91,21 @@ void connectPortDist(LADSPA_Handle Instance, unsigned long Port, LADSPA_Data * D
 
 void runDist(LADSPA_Handle Instance, unsigned long SampleCount) {
     MireDist * p = (MireDist *)Instance;
+
+    
     float in_gain = powf(10.0f, *p->ports[DIST_GAIN] / 20.0f);
-    int mode = (int)(*p->ports[DIST_MODE] + 0.5f);
     float out_gain = powf(10.0f, *p->ports[DIST_OUT] / 20.0f);
+    int mode = (int)(*p->ports[DIST_MODE] + 0.5f);
     int hpf_on = (*p->ports[DIST_HPF_ON] > 0.5f);
     
-    // Map knob (0, 1, 2) to factor (2, 4, 8)
     int os_knob = (int)(*p->ports[DIST_OVERSAMPLE] + 0.5f);
-    int os_factor = 2;
-    if (os_knob == 1) os_factor = 4;
-    else if (os_knob == 2) os_factor = 8;
+    int os_factor = (os_knob == 1) ? 4 : (os_knob == 2 ? 8 : 2);
+    float inv_os = 1.0f / (float)os_factor;
 
+    
     setup_bell(&p->bellL, *p->ports[DIST_PEAK_F], *p->ports[DIST_PEAK_Q], *p->ports[DIST_PEAK_G], p->m_fSR);
     p->bellR = p->bellL;
+    
 
     for (unsigned long i = 0; i < SampleCount; i++) {
         float sL = p->ports[DIST_IN_L][i];
@@ -121,15 +123,17 @@ void runDist(LADSPA_Handle Instance, unsigned long SampleCount) {
         float dR = sR * in_gain;
 
         float accumL = 0.0f, accumR = 0.0f;
-        float inv_os = 1.0f / (float)os_factor;
+        
+        float diffL = (dL - p->last_xL) * inv_os;
+        float diffR = (dR - p->last_xR) * inv_os;
+        float curL = p->last_xL;
+        float curR = p->last_xR;
 
-        for (int step = 1; step <= os_factor; step++) {
-            float frac = (float)step * inv_os;
-            float interL = p->last_xL + (dL - p->last_xL) * frac;
-            float interR = p->last_xR + (dR - p->last_xR) * frac;
-            
-            accumL += apply_dist(interL, mode);
-            accumR += apply_dist(interR, mode);
+        for (int step = 0; step < os_factor; step++) {
+            curL += diffL;
+            curR += diffR;
+            accumL += apply_dist(curL, mode);
+            accumR += apply_dist(curR, mode);
         }
         
         p->last_xL = dL;
@@ -147,7 +151,7 @@ const LADSPA_Descriptor * ladspa_descriptor(unsigned long Index) {
     if (Index != 0) return NULL;
     if (!g_desc) {
         g_desc = (LADSPA_Descriptor *)calloc(1, sizeof(LADSPA_Descriptor));
-        g_desc->UniqueID = 604007;
+        g_desc->UniqueID = 604005;
         g_desc->Label = strdup("mire_dist");
         g_desc->Name = strdup("Mire Dist");
         g_desc->Maker = strdup("Mire");
@@ -179,8 +183,6 @@ const LADSPA_Descriptor * ladspa_descriptor(unsigned long Index) {
         h[4].LowerBound=100; h[4].UpperBound=8000; h[4].HintDescriptor=LADSPA_HINT_BOUNDED_BELOW|LADSPA_HINT_BOUNDED_ABOVE|LADSPA_HINT_LOGARITHMIC|LADSPA_HINT_DEFAULT_MIDDLE;
         h[5].LowerBound=0.1; h[5].UpperBound=10.0; h[5].HintDescriptor=LADSPA_HINT_BOUNDED_BELOW|LADSPA_HINT_BOUNDED_ABOVE|LADSPA_HINT_DEFAULT_MIDDLE;
         h[6].LowerBound=0; h[6].UpperBound=30; h[6].HintDescriptor=LADSPA_HINT_BOUNDED_BELOW|LADSPA_HINT_BOUNDED_ABOVE|LADSPA_HINT_DEFAULT_MINIMUM;
-        
-        // Oversampling: 0, 1, 2. Default to 1 (4x).
         h[7].LowerBound=0; h[7].UpperBound=2; h[7].HintDescriptor=LADSPA_HINT_BOUNDED_BELOW|LADSPA_HINT_BOUNDED_ABOVE|LADSPA_HINT_INTEGER|LADSPA_HINT_DEFAULT_MIDDLE;
         
         g_desc->PortRangeHints = h;

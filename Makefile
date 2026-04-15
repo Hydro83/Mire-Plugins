@@ -1,6 +1,6 @@
 CC = gcc
 CXX = g++
-CFLAGS = -shared -fPIC -O2 -lm
+CFLAGS = -shared -fPIC -O3 -ffast-math -lm
 LADSPA_DIR = LADSPA
 LV2_DIR = LV2
 

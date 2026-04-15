@@ -19,7 +19,7 @@
 03.Installing plugins
    
    After building copy the compiled .so files with: make install
-   Ladspa plugins will be installed in home directory "~/.ladspa" and lv2 plugins in "~/.lv2" folder.
+   Ladspa plugins will be installed in home directory "/.ladspa" and lv2 plugins in "/.lv2" folder.
 
 ## LADSPA PLUGINS
 

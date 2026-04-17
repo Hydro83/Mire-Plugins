@@ -1,9 +1,9 @@
 ## Mire-Plugins
-## A collection of lightweight LADSPA and LV2 audio plugins for Linux.
+A collection of lightweight LADSPA and LV2 audio plugins for Linux.
 
 ## How to build plugins
 
-01.Prerequisites for building plugins
+#01.Prerequisites for building plugins
    
    To compile these plugins, you will need `gcc`, `g++`, `make`, and the development headers for LADSPA and LV2.
    Debian: sudo apt install build-essential ladspa-sdk lv2-dev

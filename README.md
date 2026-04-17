@@ -21,9 +21,5 @@ A collection of lightweight LADSPA and LV2 audio plugins for Linux.
    After building copy the compiled .so files with: make install
    Ladspa plugins will be installed in home directory "/.ladspa" and lv2 plugins in "/.lv2" folder.
 
-## LADSPA PLUGINS
 
-00.Mire Chop (mire_chop.so)
-   
-   Simple gate effect
 

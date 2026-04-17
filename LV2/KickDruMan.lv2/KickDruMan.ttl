@@ -10,34 +10,34 @@
     a lv2:Plugin , lv2:InstrumentPlugin ;
     doap:name "KickDruMan" ;
     lv2:port [
-        a lv2:ControlPort , lv2:InputPort ; lv2:index 0 ; lv2:symbol "f1" ; lv2:name "0.Start(Hz)" ;
+        a lv2:ControlPort , lv2:InputPort ; lv2:index 0 ; lv2:symbol "f1" ; lv2:name "Start Hz" ;
         lv2:default 7500.0 ; lv2:minimum 500.0 ; lv2:maximum 15000.0
     ] , [
-        a lv2:ControlPort , lv2:InputPort ; lv2:index 1 ; lv2:symbol "f2" ; lv2:name "1.Mid(Hz)" ;
+        a lv2:ControlPort , lv2:InputPort ; lv2:index 1 ; lv2:symbol "f2" ; lv2:name "Mid Hz" ;
         lv2:default 503.0 ; lv2:minimum 25.0 ; lv2:maximum 1000.0
     ] , [
-        a lv2:ControlPort , lv2:InputPort ; lv2:index 2 ; lv2:symbol "f3" ; lv2:name "2.End(Hz)" ;
+        a lv2:ControlPort , lv2:InputPort ; lv2:index 2 ; lv2:symbol "f3" ; lv2:name "End Hz" ;
         lv2:default 50.0 ; lv2:minimum 25.0 ; lv2:maximum 150.0
     ] , [
-        a lv2:ControlPort , lv2:InputPort ; lv2:index 3 ; lv2:symbol "t1" ; lv2:name "3.S->M(ms)" ;
+        a lv2:ControlPort , lv2:InputPort ; lv2:index 3 ; lv2:symbol "t1" ; lv2:name "S->M ms" ;
         lv2:default 0.01 ; lv2:minimum 0.005 ; lv2:maximum 0.15
     ] , [
-        a lv2:ControlPort , lv2:InputPort ; lv2:index 4 ; lv2:symbol "c1" ; lv2:name "3.S->M(Crv)" ;
+        a lv2:ControlPort , lv2:InputPort ; lv2:index 4 ; lv2:symbol "c1" ; lv2:name "S->M Curve" ;
         lv2:default 0.89 ; lv2:minimum 0.0 ; lv2:maximum 1.0
     ] , [
-        a lv2:ControlPort , lv2:InputPort ; lv2:index 5 ; lv2:symbol "t2" ; lv2:name "4.M->E(ms)" ;
+        a lv2:ControlPort , lv2:InputPort ; lv2:index 5 ; lv2:symbol "t2" ; lv2:name "M->E ms" ;
         lv2:default 0.14 ; lv2:minimum 0.05 ; lv2:maximum 0.8
     ] , [
-        a lv2:ControlPort , lv2:InputPort ; lv2:index 6 ; lv2:symbol "c2" ; lv2:name "4.M->E(Crv)" ;
+        a lv2:ControlPort , lv2:InputPort ; lv2:index 6 ; lv2:symbol "c2" ; lv2:name "M->E Curve" ;
         lv2:default 0.5 ; lv2:minimum 0.0 ; lv2:maximum 1.0
     ] , [
-        a lv2:ControlPort , lv2:InputPort ; lv2:index 7 ; lv2:symbol "f3_vol" ; lv2:name "2.End(dB)" ;
+        a lv2:ControlPort , lv2:InputPort ; lv2:index 7 ; lv2:symbol "f3_vol" ; lv2:name "End Vol" ;
         lv2:default 1.0 ; lv2:minimum 0.0 ; lv2:maximum 1.0
     ] , [
-        a lv2:ControlPort , lv2:InputPort ; lv2:index 8 ; lv2:symbol "boxy_gain" ; lv2:name "5.Filt(dB)" ;
+        a lv2:ControlPort , lv2:InputPort ; lv2:index 8 ; lv2:symbol "boxy_gain" ; lv2:name "Boxy Gain" ;
         lv2:default 0.0 ; lv2:minimum -15.0 ; lv2:maximum 0.0
     ] , [
-        a lv2:ControlPort , lv2:InputPort ; lv2:index 9 ; lv2:symbol "boxy_q" ; lv2:name "5.Filt(Q)" ;
+        a lv2:ControlPort , lv2:InputPort ; lv2:index 9 ; lv2:symbol "boxy_q" ; lv2:name "Boxy Q" ;
         lv2:default 5.0 ; lv2:minimum 0.1 ; lv2:maximum 10.0
     ] , [
         a lv2:InputPort , atom:AtomPort ;
